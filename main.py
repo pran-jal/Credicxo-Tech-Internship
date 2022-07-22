@@ -1,12 +1,12 @@
-import traceback
-import requests as r
-import csv
-from bs4 import BeautifulSoup
 import re
-import undetected_chromedriver as uc
-import random
+import csv
 import time
 import json
+import random
+import traceback
+import requests as r
+from bs4 import BeautifulSoup
+import undetected_chromedriver as uc
 
 agents = [
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/42.0.2311.135 Safari/537.36 Edge/12.246',
@@ -44,6 +44,7 @@ def a_price(url, asin, headers):        # scrape price
     this set the price of all the different sellers.
     returns the list of all the price or None.
     """
+    
     price = None
     if r.get(url).status_code == 200:
         pass
@@ -52,7 +53,7 @@ def a_price(url, asin, headers):        # scrape price
             headers['referer'] = r.head(url).headers['Location']
         except:
             traceback.print_exc()
-            print(r.head(url).headers)
+
         price_offer_list = r.get(f'https://www.amazon.de/gp/product/ajax/ref=auto_load_aod?asin={asin}&pc=dp&experienceId=aodAjaxMain', headers=headers).content
         soup = BeautifulSoup(price_offer_list, 'html.parser')
         prices = soup.find_all("span",{"class":"a-offscreen"})
@@ -67,14 +68,15 @@ def scrape(page, url, headers):     # scrape all and calls price scraper
     """
     soup = BeautifulSoup(page, 'html.parser')
     
+    # product title
     product_title = soup.find("span", {'id': "productTitle"}).text.strip()
 
+    # product detail
     space = re.compile("[ \n\t]{2,}")
     try:
         details = re.sub(space, '\n', soup.find("table", {"id": "productDetails_techSpec_section_1"}).text)
     except:
         details = re.sub(space, '\n', soup.find("div", {"id":"detailBullets_feature_div"}).text)
-    
     details = details.split('\n')
     for i in details:
         details[details.index(i)] = i.strip().strip('\u200e')
@@ -104,14 +106,19 @@ def scrape(page, url, headers):     # scrape all and calls price scraper
     if price_s is not None:
         price = price_s.text
     else:
-        link_of_p = soup.find("span",{"data-action":"show-all-offers-display"}).find("a", {"class": "a-button-text"})
-        if link_of_p is not None:
-            url = url.split('/dp/')
-            link = url[0]+link_of_p['href']
-            price = a_price(link, url[1], headers)
+        price_f = soup.find("div", {"id": "corePriceDisplay_desktop_feature_div"})
+        if price_f is not None:
+            price = price_f.find("span", {"class": "a-offscreen"}).text
+        
         else:
-            price_list = soup.find_all("span", {"class":"a-offscreen"})
-            price = [re.sub(re.compile("[A-Za-z \n\t,\\]*"), '\n', i.text.strip().strip('\u20ac')) for i in price_list]
+            link_of_p = soup.find("span",{"data-action":"show-all-offers-display"}).find("a", {"class": "a-button-text"})
+            if link_of_p is not None:
+                url = url.split('/dp/')
+                link = url[0]+link_of_p['href']
+                price = a_price(link, url[1], headers)
+            else:
+                price_list = soup.find_all("span", {"class":"a-offscreen"})
+                price = [re.sub(re.compile("[A-Za-z]"), '', i.text.strip().strip('\u20ac')) for i in price_list]
 
     try:
         image = soup.find("img", {"id": "landingImage"})['src']
@@ -140,7 +147,6 @@ def sel(url, headers):              # selenium in case scraper detected
     source = browser.page_source
     browser.quit()
     return scrape(source, url, headers)
-
 
 def main():
     """ 
